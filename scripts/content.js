@@ -25,13 +25,19 @@
       instructions: 'Stand up, stretch, grab some water — let your body and mind wander for 5 minutes.',
       emoji: '\u{1F3C3}', // 🏃
     },
+    custom: {
+      title: 'Time for a Break',
+      instructions: 'Step away for a moment and come back refreshed.',
+      emoji: '\u{2615}', // ☕
+    },
   };
 
-  /** Format seconds as m:ss for the countdown display. */
+  /** Format seconds as mm:ss for the countdown display (e.g. 300 -> "05:00"). */
   function formatCountdown(totalSeconds) {
-    const m = Math.floor(totalSeconds / 60);
-    const s = totalSeconds % 60;
-    return `${m}:${String(s).padStart(2, '0')}`;
+    const safe = Math.max(0, Math.floor(totalSeconds));
+    const m = Math.floor(safe / 60);
+    const s = safe % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   }
 
   /** Remove the overlay (if present), clear its timers, and unlock the page. */
@@ -84,14 +90,18 @@
   /**
    * Build and attach the full-screen break overlay inside an isolated
    * Shadow DOM root so page CSS cannot bleed in or leak out.
-   * @param {'eye'|'long'} breakType
+   * @param {'eye'|'long'|'custom'} breakType
    * @param {number} durationSeconds
    * @param {string} characterTheme 'cat' | 'dog' | 'superhero'
+   * @param {{title?: string, instructions?: string, profileId?: string}} [options]
    */
-  function createBreakOverlay(breakType, durationSeconds, characterTheme) {
+  function createBreakOverlay(breakType, durationSeconds, characterTheme, options = {}) {
     dismissOverlay(); // never stack two overlays
 
-    const copy = BREAK_COPY[breakType] ?? BREAK_COPY.eye;
+    const copy = BREAK_COPY[breakType] ?? BREAK_COPY.custom;
+    // Custom profiles override the title/subtitle; presets keep their built-in copy.
+    const titleText = options.title || copy.title;
+    const instructionsText = options.instructions || copy.instructions;
 
     // --- Host element ------------------------------------------------------
     const host = document.createElement('div');
@@ -237,11 +247,11 @@
 
     const title = document.createElement('h1');
     title.className = 'bb-title';
-    title.textContent = copy.title;
+    title.textContent = titleText;
 
     const instructions = document.createElement('p');
     instructions.className = 'bb-instructions';
-    instructions.textContent = copy.instructions;
+    instructions.textContent = instructionsText;
 
     const countdown = document.createElement('div');
     countdown.className = 'bb-countdown';
@@ -275,7 +285,16 @@
       // tear the overlay down immediately.
       try {
         chrome.runtime.sendMessage(
-          { type: 'SNOOZE', breakType, minutes: 5 },
+          {
+            type: 'SNOOZE',
+            breakType,
+            profileId: options.profileId,
+            minutes: 5,
+            durationSeconds,
+            characterTheme,
+            title: options.title,
+            instructions: options.instructions,
+          },
           (response) => {
             if (chrome.runtime.lastError) {
               note.textContent = 'Could not reach BreakBuddy — break not snoozed.';
@@ -320,7 +339,11 @@
   // --- Messaging ---------------------------------------------------------
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === 'TRIGGER_BREAK') {
-      createBreakOverlay(message.breakType, message.durationSeconds, message.characterTheme);
+      createBreakOverlay(message.breakType, message.durationSeconds, message.characterTheme, {
+        title: message.title,
+        instructions: message.instructions,
+        profileId: message.profileId,
+      });
       sendResponse({ ok: true });
     }
     return false;
