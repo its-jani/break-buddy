@@ -134,6 +134,50 @@
         justify-content: center;
       }
 
+      .bb-actions {
+        display: flex;
+        gap: 0.75rem;
+        margin-top: 0.5rem;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      .bb-btn {
+        appearance: none;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 999px;
+        padding: 0.65rem 1.5rem;
+        font-size: 1rem;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+      }
+
+      .bb-btn:hover { transform: translateY(-1px); }
+      .bb-btn:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
+
+      .bb-btn--snooze {
+        background: rgba(125, 211, 252, 0.16);
+        color: #bae6fd;
+        border-color: rgba(125, 211, 252, 0.4);
+      }
+
+      .bb-btn--snooze:hover { background: rgba(125, 211, 252, 0.28); }
+
+      .bb-btn--skip {
+        background: transparent;
+        color: #9aa3b2;
+      }
+
+      .bb-btn--skip:hover { background: rgba(255, 255, 255, 0.06); color: #d7dbe2; }
+
+      .bb-note {
+        font-size: 0.85rem;
+        color: #7c8595;
+        min-height: 1.2em;
+      }
+
       @keyframes bb-float {
         0%, 100% { transform: translateY(0); }
         50% { transform: translateY(-12px); }
@@ -166,7 +210,49 @@
     stage.className = 'bb-stage';
     stage.dataset.character = characterTheme || 'cat';
 
-    backdrop.append(emoji, title, instructions, countdown, stage);
+    // --- Snooze / Skip controls ----------------------------------------------
+    const snoozeBtn = document.createElement('button');
+    snoozeBtn.type = 'button';
+    snoozeBtn.className = 'bb-btn bb-btn--snooze';
+    snoozeBtn.textContent = 'Snooze (5m)';
+
+    const skipBtn = document.createElement('button');
+    skipBtn.type = 'button';
+    skipBtn.className = 'bb-btn bb-btn--skip';
+    skipBtn.textContent = 'Skip Break';
+
+    const note = document.createElement('div');
+    note.className = 'bb-note'; // inline feedback for snooze/skip
+
+    snoozeBtn.addEventListener('click', () => {
+      // Ask the background worker to delay this break by 5 minutes, then
+      // tear the overlay down immediately.
+      try {
+        chrome.runtime.sendMessage(
+          { type: 'SNOOZE', breakType, minutes: 5 },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              note.textContent = 'Could not reach BreakBuddy — break not snoozed.';
+              return;
+            }
+            note.textContent = `Snoozed ${response?.snoozeMinutes ?? 5} minutes.`;
+          }
+        );
+      } catch {
+        note.textContent = 'Could not reach BreakBuddy — break not snoozed.';
+      }
+      dismissOverlay();
+    });
+
+    skipBtn.addEventListener('click', () => {
+      dismissOverlay(); // cleanly clears the countdown interval + removes the DOM node
+    });
+
+    const actions = document.createElement('div');
+    actions.className = 'bb-actions';
+    actions.append(snoozeBtn, skipBtn);
+
+    backdrop.append(emoji, title, instructions, countdown, stage, actions, note);
     shadow.append(style, backdrop);
     document.body.appendChild(host);
     document.documentElement.classList.add(ACTIVE_CLASS);
