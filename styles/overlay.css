@@ -1,0 +1,14 @@
+/*
+ * BreakBuddy — page-level styles applied while a break overlay is active.
+ * The overlay itself lives inside the Shadow DOM of #break-buddy-root;
+ * these rules tame the underlying document during a break.
+ */
+
+html.break-buddy-active,
+html.break-buddy-active body {
+  overflow: hidden !important;
+}
+
+html.break-buddy-active * {
+  user-select: none !important;
+}

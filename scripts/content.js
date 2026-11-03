@@ -44,6 +44,43 @@
     document.documentElement.classList.remove(ACTIVE_CLASS);
   }
 
+  /** Character themes that have a matching assets/<theme>_walk.webm file. */
+  const VALID_CHARACTERS = ['cat', 'dog', 'superhero'];
+
+  /**
+   * Load the walking character animation into the overlay stage.
+   * Falls back to the static emoji if the WebM is missing or unsupported.
+   * @param {HTMLElement} stage
+   * @param {string} characterTheme
+   * @param {HTMLElement} emojiFallback
+   */
+  function populateStage(stage, characterTheme, emojiFallback) {
+    const theme = VALID_CHARACTERS.includes(characterTheme) ? characterTheme : 'cat';
+    const src = chrome.runtime.getURL(`assets/${theme}_walk.webm`);
+
+    const video = document.createElement('video');
+    video.autoplay = true;
+    video.loop = true;
+    video.muted = true;
+    video.playsInline = true;
+    video.setAttribute('playsinline', '');
+    video.preload = 'auto';
+    video.src = src;
+    video.alt = '';
+
+    // Hide the emoji placeholder while the buddy animation is visible.
+    video.addEventListener('playing', () => {
+      emojiFallback.style.display = 'none';
+    });
+
+    // Broken/missing asset — keep the emoji and drop the video quietly.
+    video.addEventListener('error', () => {
+      video.remove();
+    });
+
+    stage.replaceChildren(video);
+  }
+
   /**
    * Build and attach the full-screen break overlay inside an isolated
    * Shadow DOM root so page CSS cannot bleed in or leak out.
@@ -128,10 +165,16 @@
 
       .bb-stage {
         /* Dynamic media container — character animation is rendered here. */
-        min-height: 2rem;
+        min-height: 8rem;
         display: flex;
         align-items: center;
         justify-content: center;
+      }
+
+      .bb-stage video {
+        width: min(46vw, 420px);
+        height: auto;
+        filter: drop-shadow(0px 10px 15px rgba(0, 0, 0, 0.5));
       }
 
       .bb-actions {
@@ -209,6 +252,9 @@
     const stage = document.createElement('div');
     stage.className = 'bb-stage';
     stage.dataset.character = characterTheme || 'cat';
+
+    // --- Character media --------------------------------------------------
+    populateStage(stage, characterTheme, emoji);
 
     // --- Snooze / Skip controls ----------------------------------------------
     const snoozeBtn = document.createElement('button');
