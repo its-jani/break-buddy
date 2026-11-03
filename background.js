@@ -8,74 +8,135 @@
 // Constants
 // ---------------------------------------------------------------------------
 
-const EYE_BREAK_ALARM = 'eyeBreakAlarm';
-const LONG_BREAK_ALARM = 'longBreakAlarm';
+// Built-in profile ids (stable alarm-name suffixes).
+const EYE_BREAK_ID = 'eye';
+const LONG_BREAK_ID = 'long';
 
-/** Break durations (seconds) fired when an alarm is due. */
+/** Prefix for every dynamically scheduled break alarm. */
+const BREAK_ALARM_PREFIX = 'break_alarm_';
+
+/** Default overlay durations (seconds) — user-customisable via settings. */
 const EYE_BREAK_DURATION = 20; // 20-second eye rest (20-20-20 rule)
 const LONG_BREAK_DURATION = 300; // 5-minute movement / creative break
 
 const BREAK_TYPES = {
   eye: 'eye',
   long: 'long',
+  custom: 'custom',
 };
 
 const DEFAULT_SETTINGS = {
   eyeBreakInterval: 20, // minutes between eye breaks
+  eyeBreakDuration: EYE_BREAK_DURATION, // seconds the eye overlay lasts
   longBreakInterval: 60, // minutes between long breaks
+  longBreakDuration: LONG_BREAK_DURATION, // seconds the long overlay lasts
   selectedCharacter: 'cat', // 'cat' | 'dog' | 'superhero'
 };
+
+// Shape of a stored custom break profile:
+// { id, name, intervalMinutes, durationSeconds, character, enabled }
+const DEFAULT_CUSTOM_BREAKS = [];
+
+/** Storage keys used across the app. */
+const STORAGE_KEYS = { ...DEFAULT_SETTINGS, customBreaks: DEFAULT_CUSTOM_BREAKS };
+
+// ---------------------------------------------------------------------------
+// Break profile model
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the complete list of break profiles — the two built-in presets plus
+ * every user-created custom break — resolved from persisted storage. This is
+ * the single source of truth for scheduling, alarm firing, and manual triggers.
+ */
+async function getBreakProfiles() {
+  const data = await chrome.storage.local.get(STORAGE_KEYS);
+
+  const presets = [
+    {
+      id: EYE_BREAK_ID,
+      breakType: BREAK_TYPES.eye,
+      name: 'Eye Rest Break',
+      intervalMinutes: data.eyeBreakInterval,
+      durationSeconds: data.eyeBreakDuration,
+      character: data.selectedCharacter,
+      enabled: true,
+    },
+    {
+      id: LONG_BREAK_ID,
+      breakType: BREAK_TYPES.long,
+      name: 'Move & Create Break',
+      intervalMinutes: data.longBreakInterval,
+      durationSeconds: data.longBreakDuration,
+      character: data.selectedCharacter,
+      enabled: true,
+    },
+  ];
+
+  const customs = (Array.isArray(data.customBreaks) ? data.customBreaks : []).map((cb) => ({
+    id: cb.id,
+    breakType: BREAK_TYPES.custom,
+    name: cb.name || 'Custom Break',
+    intervalMinutes: cb.intervalMinutes,
+    durationSeconds: cb.durationSeconds,
+    character: cb.character || data.selectedCharacter,
+    enabled: cb.enabled !== false,
+  }));
+
+  return [...presets, ...customs];
+}
+
+/** Resolve a single profile by id, or null if it no longer exists. */
+async function findBreakProfile(id) {
+  const profiles = await getBreakProfiles();
+  return profiles.find((profile) => profile.id === id) || null;
+}
 
 // ---------------------------------------------------------------------------
 // Alarm scheduling
 // ---------------------------------------------------------------------------
 
 /**
- * (Re)create the repeating break alarms from the given settings.
- * @param {{eyeBreakInterval:number,longBreakInterval:number}} settings
+ * Clear and (re)create repeating alarms for every enabled profile. Supports an
+ * arbitrary number of concurrent custom timers, each on its own schedule.
  */
-async function scheduleAlarms(settings) {
+async function scheduleAllBreaks() {
   await chrome.alarms.clearAll();
 
-  const eyeMinutes = Math.max(1, Number(settings.eyeBreakInterval) || DEFAULT_SETTINGS.eyeBreakInterval);
-  const longMinutes = Math.max(1, Number(settings.longBreakInterval) || DEFAULT_SETTINGS.longBreakInterval);
+  const profiles = await getBreakProfiles();
+  let scheduled = 0;
 
-  chrome.alarms.create(EYE_BREAK_ALARM, { periodInMinutes: eyeMinutes });
-  chrome.alarms.create(LONG_BREAK_ALARM, { periodInMinutes: longMinutes });
+  for (const profile of profiles) {
+    if (!profile.enabled) continue;
+    const minutes = Math.max(1, Number(profile.intervalMinutes) || 1);
+    chrome.alarms.create(`${BREAK_ALARM_PREFIX}${profile.id}`, { periodInMinutes: minutes });
+    scheduled += 1;
+  }
 
-  console.info(
-    `[BreakBuddy] alarms scheduled — eye break every ${eyeMinutes} min, long break every ${longMinutes} min`
-  );
+  console.info(`[BreakBuddy] ${scheduled} break alarm(s) scheduled`);
 }
 
 // ---------------------------------------------------------------------------
-// Break trigger
+// Alarm firing
 // ---------------------------------------------------------------------------
-
-/**
- * Fire a break of the given type across all windows.
- * @param {'eye'|'long'} breakType
- * @param {number} durationSeconds
- */
-function triggerBreak(breakType, durationSeconds) {
-  console.info(`[BreakBuddy] ${breakType} break due (${durationSeconds}s)`);
-  broadcastBreak(breakType, durationSeconds);
-}
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  switch (alarm.name) {
-    case EYE_BREAK_ALARM:
-      triggerBreak(BREAK_TYPES.eye, EYE_BREAK_DURATION);
-      break;
-    case LONG_BREAK_ALARM:
-      triggerBreak(BREAK_TYPES.long, LONG_BREAK_DURATION);
-      break;
-    default:
-      // Snooze / ad-hoc alarms fire their stored break once.
-      handleScheduledBreakAlarm(alarm);
-      break;
+  if (alarm.name.startsWith(BREAK_ALARM_PREFIX)) {
+    const id = alarm.name.slice(BREAK_ALARM_PREFIX.length);
+    dispatchBreakById(id);
+  } else {
+    // Snooze / ad-hoc one-shot alarms fire their stored break once.
+    handleScheduledBreakAlarm(alarm);
   }
 });
+
+/** Resolve a profile by id and broadcast its break across all windows. */
+async function dispatchBreakById(id) {
+  const profile = await findBreakProfile(id);
+  if (!profile) return; // profile was deleted before the alarm fired
+  console.info(`[BreakBuddy] "${profile.name}" break due (${profile.durationSeconds}s)`);
+  broadcastBreak(profile.breakType, profile.durationSeconds, profile.character);
+}
 
 // ---------------------------------------------------------------------------
 // Multi-window broadcasting & messaging
@@ -121,14 +182,13 @@ async function broadcastBreak(breakType, durationSeconds, characterTheme) {
 }
 
 /**
- * Reset the repeating schedule from persisted settings and notify open tabs
- * so their countdown displays reflect the new cadence.
+ * Persist updated preset settings, then rebuild every alarm from storage.
  * @param {object} newSettings
  */
 async function applySettingsUpdate(newSettings) {
   const merged = { ...DEFAULT_SETTINGS, ...newSettings };
   await chrome.storage.local.set(merged);
-  await scheduleAlarms(merged);
+  await scheduleAllBreaks();
 
   // Best-effort ping so popups/tabs can refresh their state.
   chrome.runtime.sendMessage({ type: 'SETTINGS_UPDATED', settings: merged }).catch(() => {
@@ -179,11 +239,11 @@ async function handleScheduledBreakAlarm(alarm) {
 // ---------------------------------------------------------------------------
 
 chrome.runtime.onInstalled.addListener(async () => {
-  // Populate default settings on first install (do not overwrite user values).
-  const stored = await chrome.storage.local.get(DEFAULT_SETTINGS);
+  // Populate defaults on first install without overwriting existing user values.
+  const stored = await chrome.storage.local.get(STORAGE_KEYS);
   await chrome.storage.local.set(stored);
 
-  await scheduleAlarms(stored);
+  await scheduleAllBreaks();
   console.info('[BreakBuddy] installed — defaults populated and alarms scheduled');
 });
 
@@ -191,7 +251,6 @@ chrome.runtime.onStartup.addListener(async () => {
   // Service worker restart safety net: make sure alarms still exist.
   const existing = await chrome.alarms.getAll();
   if (existing.length === 0) {
-    const settings = await chrome.storage.local.get(DEFAULT_SETTINGS);
-    await scheduleAlarms(settings);
+    await scheduleAllBreaks();
   }
 });
