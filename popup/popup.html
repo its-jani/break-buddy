@@ -15,53 +15,132 @@
     </div>
   </header>
 
-  <main>
-    <form id="settings-form">
-      <div class="bb-field">
-        <label for="eye-break-interval">Eye Break Interval <span class="bb-unit">(mins)</span></label>
-        <input
-          type="number"
-          id="eye-break-interval"
-          name="eyeBreakInterval"
-          min="1"
-          max="180"
-          step="1"
-          required
-        />
-        <p class="bb-hint">20-20-20 rule: look 20 ft away for 20s, every 20 mins.</p>
-      </div>
+  <!-- --- Tabs ------------------------------------------------------------- -->
+  <nav class="bb-tabs" role="tablist" aria-label="Break settings sections">
+    <button type="button" class="bb-tab is-active" id="tab-defaults" role="tab" aria-selected="true" aria-controls="panel-defaults">
+      Default Timers
+    </button>
+    <button type="button" class="bb-tab" id="tab-customs" role="tab" aria-selected="false" aria-controls="panel-customs">
+      Custom Breaks
+    </button>
+  </nav>
 
-      <div class="bb-field">
-        <label for="long-break-interval">Long Break Interval <span class="bb-unit">(mins)</span></label>
-        <input
-          type="number"
-          id="long-break-interval"
-          name="longBreakInterval"
-          min="1"
-          max="240"
-          step="1"
-          required
-        />
-        <p class="bb-hint">A 5-minute movement / creative break.</p>
-      </div>
+  <main class="bb-panels">
+    <!-- --- Default Timers panel ------------------------------------------- -->
+    <section class="bb-panel is-active" id="panel-defaults" role="tabpanel" aria-labelledby="tab-defaults">
+      <form id="defaults-form">
+        <fieldset class="bb-group">
+          <legend>
+            Eye Rest Break
+            <button type="button" class="bb-now" data-take-now="eye" title="Trigger this break now">⚡ Take Break Now</button>
+          </legend>
+          <div class="bb-row">
+            <div class="bb-field">
+              <label for="eye-break-interval">Interval <span class="bb-unit">(mins)</span></label>
+              <input type="number" id="eye-break-interval" name="eyeBreakInterval" min="1" max="180" step="1" required />
+            </div>
+            <div class="bb-field">
+              <label for="eye-break-duration">Duration <span class="bb-unit">(secs)</span></label>
+              <input type="number" id="eye-break-duration" name="eyeBreakDuration" min="1" max="600" step="1" required />
+            </div>
+          </div>
+          <p class="bb-hint">20-20-20 rule: look 20 ft away, every 20 mins.</p>
+        </fieldset>
 
-      <div class="bb-field">
-        <label for="character-theme">Character Theme</label>
-        <select id="character-theme" name="selectedCharacter">
-          <option value="cat">🐱 Cat</option>
-          <option value="dog">🐶 Dog</option>
-          <option value="superhero">🦸 Superhero</option>
-        </select>
-        <p class="bb-hint">Your buddy strolls across the screen during breaks.</p>
-      </div>
+        <fieldset class="bb-group">
+          <legend>
+            Long Break
+            <button type="button" class="bb-now" data-take-now="long" title="Trigger this break now">⚡ Take Break Now</button>
+          </legend>
+          <div class="bb-row">
+            <div class="bb-field">
+              <label for="long-break-interval">Interval <span class="bb-unit">(mins)</span></label>
+              <input type="number" id="long-break-interval" name="longBreakInterval" min="1" max="240" step="1" required />
+            </div>
+            <div class="bb-field">
+              <label for="long-break-duration">Duration <span class="bb-unit">(mins)</span></label>
+              <input type="number" id="long-break-duration" name="longBreakDuration" min="1" max="60" step="1" required />
+            </div>
+          </div>
+          <p class="bb-hint">A movement / creative break (duration in minutes).</p>
+        </fieldset>
 
-      <button type="submit" id="save-btn" class="bb-save">Save Settings</button>
-      <p id="status" class="bb-status" role="status" aria-live="polite"></p>
-    </form>
+        <div class="bb-field">
+          <label for="character-theme">Default Character Theme</label>
+          <select id="character-theme" name="selectedCharacter">
+            <option value="cat">🐱 Cat</option>
+            <option value="dog">🐶 Dog</option>
+            <option value="superhero">🦸 Superhero</option>
+          </select>
+          <p class="bb-hint">Used by preset breaks and as the fallback for custom breaks.</p>
+        </div>
+
+        <button type="submit" id="save-btn" class="bb-save">Save Settings</button>
+      </form>
+    </section>
+
+    <!-- --- Custom Breaks panel -------------------------------------------- -->
+    <section class="bb-panel" id="panel-customs" role="tabpanel" aria-labelledby="tab-customs" hidden>
+      <div class="bb-toolbar">
+        <span class="bb-count" id="custom-count">0 breaks</span>
+        <button type="button" id="add-custom-btn" class="bb-add">＋ Add Custom Break</button>
+      </div>
+      <ul class="bb-list" id="custom-breaks-list"></ul>
+      <p class="bb-empty" id="custom-empty" hidden>No custom breaks yet. Create one to get started.</p>
+    </section>
+
+    <p id="status" class="bb-status" role="status" aria-live="polite"></p>
   </main>
 
+  <!-- --- Create / Edit modal ---------------------------------------------- -->
+  <div class="bb-modal" id="custom-modal" hidden>
+    <div class="bb-modal-backdrop" data-close-modal></div>
+    <div class="bb-modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h2 id="modal-title" class="bb-modal-title">Add Custom Break</h2>
+      <form id="custom-form">
+        <input type="hidden" id="custom-id" />
+
+        <div class="bb-field">
+          <label for="custom-name">Break Name</label>
+          <input type="text" id="custom-name" placeholder="e.g. Hydration Break" maxlength="40" required />
+        </div>
+
+        <div class="bb-row">
+          <div class="bb-field">
+            <label for="custom-interval">Interval <span class="bb-unit">(mins)</span></label>
+            <input type="number" id="custom-interval" min="1" max="600" step="1" required />
+          </div>
+          <div class="bb-field">
+            <label for="custom-duration">Duration</label>
+            <div class="bb-inline">
+              <input type="number" id="custom-duration" min="1" max="3600" step="1" required />
+              <select id="custom-duration-unit" aria-label="Duration unit">
+                <option value="sec">secs</option>
+                <option value="min">mins</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="bb-field">
+          <label for="custom-character">Character Theme</label>
+          <select id="custom-character">
+            <option value="cat">🐱 Cat</option>
+            <option value="dog">🐶 Dog</option>
+            <option value="superhero">🦸 Superhero</option>
+          </select>
+        </div>
+
+        <div class="bb-modal-actions">
+          <button type="button" class="bb-btn ghost" data-close-modal>Cancel</button>
+          <button type="submit" class="bb-btn primary" id="custom-save">Save Break</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <footer class="bb-footer">
-    <span>v1.0.0</span>
+    <span>v1.1.0</span>
     <span>Breaks fire in <strong>every</strong> window</span>
   </footer>
 

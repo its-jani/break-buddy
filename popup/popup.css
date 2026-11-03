@@ -3,13 +3,16 @@
 :root {
   --bb-bg: #0f1117;
   --bb-surface: #171a23;
+  --bb-surface-2: #1f2330;
   --bb-border: rgba(255, 255, 255, 0.09);
   --bb-text: #eef1f6;
   --bb-text-dim: #98a1b3;
   --bb-accent: #7dd3fc;
   --bb-accent-strong: #38bdf8;
+  --bb-indigo: #6366f1;
   --bb-success: #4ade80;
   --bb-error: #f87171;
+  --bb-warning: #fbbf24;
   --bb-radius: 12px;
 }
 
@@ -20,7 +23,9 @@
 }
 
 body {
-  width: 320px;
+  width: 360px;
+  max-height: 560px;
+  overflow-y: auto;
   padding: 1rem;
   background: var(--bb-bg);
   color: var(--bb-text);
@@ -36,7 +41,7 @@ body {
   align-items: center;
   gap: 0.75rem;
   padding-bottom: 0.9rem;
-  margin-bottom: 0.9rem;
+  margin-bottom: 0.75rem;
   border-bottom: 1px solid var(--bb-border);
 }
 
@@ -55,10 +60,87 @@ body {
   color: var(--bb-text-dim);
 }
 
-/* --- Form ----------------------------------------------------------------- */
+/* --- Tabs ---------------------------------------------------------------- */
+
+.bb-tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: var(--bb-surface);
+  border: 1px solid var(--bb-border);
+  border-radius: var(--bb-radius);
+  margin-bottom: 0.9rem;
+}
+
+.bb-tab {
+  flex: 1;
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--bb-text-dim);
+  font: inherit;
+  font-weight: 600;
+  padding: 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.bb-tab:hover {
+  color: var(--bb-text);
+}
+
+.bb-tab.is-active {
+  background: linear-gradient(135deg, var(--bb-accent-strong), var(--bb-indigo));
+  color: #fff;
+}
+
+/* --- Panels -------------------------------------------------------------- */
+
+.bb-panel {
+  animation: bb-fade 160ms ease;
+}
+
+.bb-panel[hidden] {
+  display: none;
+}
+
+@keyframes bb-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Form ---------------------------------------------------------------- */
+
+.bb-group {
+  border: 1px solid var(--bb-border);
+  border-radius: var(--bb-radius);
+  padding: 0.75rem 0.85rem 0.85rem;
+  margin: 0 0 0.85rem;
+  background: var(--bb-surface);
+}
+
+.bb-group legend {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0 0.35rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.bb-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem;
+}
 
 .bb-field {
-  margin-bottom: 0.95rem;
+  margin-bottom: 0.6rem;
+}
+
+.bb-field:last-child {
+  margin-bottom: 0;
 }
 
 .bb-field label {
@@ -79,19 +161,35 @@ body {
   color: var(--bb-text-dim);
 }
 
+.bb-inline {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.bb-inline input {
+  flex: 1;
+  min-width: 0;
+}
+
+.bb-inline select {
+  width: auto;
+  flex: 0 0 auto;
+}
+
 input[type="number"],
+input[type="text"],
 select {
   width: 100%;
   padding: 0.5rem 0.65rem;
-  background: var(--bb-surface);
+  background: var(--bb-surface-2);
   color: var(--bb-text);
   border: 1px solid var(--bb-border);
-  border-radius: var(--bb-radius);
+  border-radius: 8px;
   font: inherit;
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
-input[type="number"]:focus-visible,
+input:focus-visible,
 select:focus-visible {
   outline: none;
   border-color: var(--bb-accent-strong);
@@ -102,17 +200,17 @@ select {
   appearance: none;
   background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2398a1b3' d='M6 8.5 2 4.5h8z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 0.65rem center;
-  padding-right: 1.8rem;
+  background-position: right 0.6rem center;
+  padding-right: 1.7rem;
 }
 
-/* --- Save & status ---------------------------------------------------------- */
+/* --- Buttons ------------------------------------------------------------- */
 
 .bb-save {
   width: 100%;
   padding: 0.6rem;
   margin-top: 0.25rem;
-  background: linear-gradient(135deg, var(--bb-accent-strong), #6366f1);
+  background: linear-gradient(135deg, var(--bb-accent-strong), var(--bb-indigo));
   color: #fff;
   font-weight: 700;
   font-size: 0.95rem;
@@ -126,9 +224,214 @@ select {
 .bb-save:active { transform: translateY(1px); }
 .bb-save:focus-visible { outline: 2px solid var(--bb-accent); outline-offset: 2px; }
 
+.bb-now {
+  appearance: none;
+  border: 1px solid rgba(125, 211, 252, 0.4);
+  background: rgba(125, 211, 252, 0.14);
+  color: #bae6fd;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.28rem 0.6rem;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.bb-now:hover { background: rgba(125, 211, 252, 0.28); }
+.bb-now:active { transform: translateY(1px); }
+
+.bb-btn {
+  appearance: none;
+  border-radius: 8px;
+  padding: 0.5rem 0.9rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: filter 120ms ease, background 120ms ease;
+}
+
+.bb-btn.primary {
+  background: linear-gradient(135deg, var(--bb-accent-strong), var(--bb-indigo));
+  color: #fff;
+}
+
+.bb-btn.primary:hover { filter: brightness(1.1); }
+
+.bb-btn.ghost {
+  background: transparent;
+  border-color: var(--bb-border);
+  color: var(--bb-text-dim);
+}
+
+.bb-btn.ghost:hover { background: var(--bb-surface-2); color: var(--bb-text); }
+
+/* --- Custom breaks: toolbar, list, rows --------------------------------- */
+
+.bb-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.7rem;
+}
+
+.bb-count {
+  font-size: 0.78rem;
+  color: var(--bb-text-dim);
+}
+
+.bb-add {
+  appearance: none;
+  border: 1px dashed var(--bb-accent-strong);
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--bb-accent);
+  font: inherit;
+  font-weight: 700;
+  padding: 0.4rem 0.7rem;
+  border-radius: var(--bb-radius);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.bb-add:hover { background: rgba(56, 189, 248, 0.2); }
+
+.bb-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.bb-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  background: var(--bb-surface);
+  border: 1px solid var(--bb-border);
+  border-radius: var(--bb-radius);
+}
+
+.bb-item.is-disabled {
+  opacity: 0.55;
+}
+
+.bb-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.bb-item-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 700;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bb-item-meta {
+  font-size: 0.72rem;
+  color: var(--bb-text-dim);
+  margin-top: 0.15rem;
+}
+
+.bb-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.bb-icon-btn {
+  appearance: none;
+  border: 1px solid var(--bb-border);
+  background: var(--bb-surface-2);
+  color: var(--bb-text-dim);
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.bb-icon-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--bb-text); }
+.bb-icon-btn.danger:hover { background: rgba(248, 113, 113, 0.16); color: var(--bb-error); }
+
+.bb-empty {
+  text-align: center;
+  color: var(--bb-text-dim);
+  font-size: 0.82rem;
+  padding: 1.5rem 0.5rem;
+  border: 1px dashed var(--bb-border);
+  border-radius: var(--bb-radius);
+}
+
+/* --- Toggle switch ------------------------------------------------------- */
+
+.switch {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 22px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  background: var(--bb-surface-2);
+  border: 1px solid var(--bb-border);
+  border-radius: 999px;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.slider::before {
+  content: "";
+  position: absolute;
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  top: 2px;
+  background: var(--bb-text-dim);
+  border-radius: 50%;
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.switch input:checked + .slider {
+  background: rgba(74, 222, 128, 0.25);
+  border-color: var(--bb-success);
+}
+
+.switch input:checked + .slider::before {
+  transform: translateX(16px);
+  background: var(--bb-success);
+}
+
+.switch input:focus-visible + .slider {
+  outline: 2px solid var(--bb-accent);
+  outline-offset: 2px;
+}
+
+/* --- Status -------------------------------------------------------------- */
+
 .bb-status {
   min-height: 1.2em;
-  margin-top: 0.5rem;
+  margin-top: 0.75rem;
   font-size: 0.78rem;
   text-align: center;
 }
@@ -136,7 +439,58 @@ select {
 .bb-status.success { color: var(--bb-success); }
 .bb-status.error { color: var(--bb-error); }
 
-/* --- Footer ------------------------------------------------------------------ */
+/* --- Modal --------------------------------------------------------------- */
+
+.bb-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.bb-modal[hidden] {
+  display: none;
+}
+
+.bb-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 6, 10, 0.66);
+  backdrop-filter: blur(2px);
+}
+
+.bb-modal-card {
+  position: relative;
+  width: calc(100% - 1.5rem);
+  max-width: 320px;
+  background: var(--bb-surface);
+  border: 1px solid var(--bb-border);
+  border-radius: 16px;
+  padding: 1rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  animation: bb-pop 160ms ease;
+}
+
+@keyframes bb-pop {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.bb-modal-title {
+  font-size: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.bb-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+/* --- Footer -------------------------------------------------------------- */
 
 .bb-footer {
   display: flex;
