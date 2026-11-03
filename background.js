@@ -135,7 +135,7 @@ async function dispatchBreakById(id) {
   const profile = await findBreakProfile(id);
   if (!profile) return; // profile was deleted before the alarm fired
   console.info(`[BreakBuddy] "${profile.name}" break due (${profile.durationSeconds}s)`);
-  broadcastBreak(profile.breakType, profile.durationSeconds, profile.character);
+  broadcastProfile(profile);
 }
 
 // ---------------------------------------------------------------------------
@@ -145,22 +145,49 @@ async function dispatchBreakById(id) {
 /** Internal pages (chrome://, edge://, web store, ...) cannot host content scripts. */
 const UNSUPPORTED_URL = /^(chrome|edge|chrome-extension|edge-extension|about|devtools|view-source|chrome-search):/;
 
+/** Fallback subtitle for custom breaks that have no bespoke copy. */
+const CUSTOM_BREAK_INSTRUCTIONS = 'Pause, reset, and come back fresher — this break is just for you.';
+
+/**
+ * Broadcast a resolved break profile (preset or custom) to every window.
+ * Custom profiles carry their own title/instructions; presets let the content
+ * script fall back to its built-in copy.
+ * @param {object} profile
+ */
+function broadcastProfile(profile) {
+  const isCustom = profile.breakType === BREAK_TYPES.custom;
+  return broadcastBreak(profile.breakType, profile.durationSeconds, profile.character || profile.characterTheme, {
+    profileId: profile.id,
+    title: isCustom ? profile.name : undefined,
+    instructions: isCustom ? profile.instructions || CUSTOM_BREAK_INSTRUCTIONS : undefined,
+  });
+}
+
 /**
  * Broadcast a TRIGGER_BREAK message to every tab in every window.
  * Injects the content script on demand for tabs that predate installation
  * or live on pages where content scripts cannot be declared.
- * @param {'eye'|'long'} breakType
+ * @param {'eye'|'long'|'custom'} breakType
  * @param {number} durationSeconds
  * @param {string} [characterTheme]
+ * @param {{profileId?: string, title?: string, instructions?: string}} [options]
  */
-async function broadcastBreak(breakType, durationSeconds, characterTheme) {
+async function broadcastBreak(breakType, durationSeconds, characterTheme, options = {}) {
   const settings = await chrome.storage.local.get(DEFAULT_SETTINGS);
   const theme = characterTheme || settings.selectedCharacter;
 
   const tabs = await chrome.tabs.query({});
   const targets = tabs.filter((tab) => tab.id !== undefined && tab.url && !UNSUPPORTED_URL.test(tab.url));
 
-  const message = { type: 'TRIGGER_BREAK', breakType, durationSeconds, characterTheme: theme };
+  const message = {
+    type: 'TRIGGER_BREAK',
+    breakType,
+    durationSeconds,
+    characterTheme: theme,
+    profileId: options.profileId,
+    title: options.title,
+    instructions: options.instructions,
+  };
 
   const deliveries = targets.map(async (tab) => {
     try {
@@ -178,7 +205,7 @@ async function broadcastBreak(breakType, durationSeconds, characterTheme) {
   });
 
   await Promise.allSettled(deliveries);
-  console.info(`[BreakBuddy] broadcast ${breakType} break to ${targets.length} tab(s)`);
+  console.info(`[BreakBuddy] broadcast ${options.title || breakType} break to ${targets.length} tab(s)`);
 }
 
 /**
@@ -202,17 +229,41 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       applySettingsUpdate(message.settings ?? {}).then(() => sendResponse({ ok: true }));
       return true; // keep the message channel open for the async response
 
-    case 'SNOOZE': {
-      // Delay the current break by 5 minutes, then fire it once.
-      const snoozeMinutes = Math.max(1, Number(message.minutes) || 5);
-      const breakType = message.breakType === BREAK_TYPES.long ? BREAK_TYPES.long : BREAK_TYPES.eye;
-      const duration = breakType === BREAK_TYPES.long ? LONG_BREAK_DURATION : EYE_BREAK_DURATION;
+    case 'UPDATE_ALL_BREAKS':
+      // Rebuild the full alarm schedule from persisted storage (presets + customs).
+      scheduleAllBreaks().then(() => sendResponse({ ok: true }));
+      return true;
 
-      chrome.alarms.create(`snooze:${breakType}`, { delayInMinutes: snoozeMinutes });
-      // Push the dismissal back to the tab that requested the snooze.
+    case 'TRIGGER_MANUAL_BREAK': {
+      // Fire a chosen profile immediately, without waiting for its alarm.
+      const p = message.profile || {};
+      broadcastProfile({
+        id: p.id,
+        breakType: p.breakType || BREAK_TYPES.custom,
+        name: p.name || 'Break',
+        durationSeconds: Number(p.durationSeconds) || DEFAULT_SETTINGS.eyeBreakDuration,
+        character: p.characterTheme || p.character,
+      });
+      sendResponse({ ok: true });
+      return false;
+    }
+
+    case 'SNOOZE': {
+      // Delay this exact break (preset or custom) by N minutes, then re-fire it once.
+      const snoozeMinutes = Math.max(1, Number(message.minutes) || 5);
+      const profileId = message.profileId || message.breakType || BREAK_TYPES.eye;
+      const descriptor = {
+        breakType: message.breakType || BREAK_TYPES.eye,
+        durationSeconds: Number(message.durationSeconds) || DEFAULT_SETTINGS.eyeBreakDuration,
+        characterTheme: message.characterTheme,
+        title: message.title,
+        instructions: message.instructions,
+      };
+
+      chrome.alarms.create(`snooze:${profileId}`, { delayInMinutes: snoozeMinutes });
+      // Remember the full break so snoozed custom profiles re-fire correctly.
+      chrome.storage.session.set({ [`pendingSnooze:${profileId}`]: descriptor });
       sendResponse({ ok: true, snoozeMinutes });
-      // Remember what to re-fire when the snooze alarm rings.
-      chrome.storage.session.set({ [`pendingSnooze:${breakType}`]: { breakType, durationSeconds: duration } });
       return false;
     }
 
@@ -223,15 +274,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 /** Handle one-shot snooze alarms created by SNOOZE requests. */
 async function handleScheduledBreakAlarm(alarm) {
-  const match = /^snooze:(eye|long)$/.exec(alarm.name);
+  const match = /^snooze:(.+)$/.exec(alarm.name);
   if (!match) return;
 
-  const key = `pendingSnooze:${match[1]}`;
+  const profileId = match[1];
+  const key = `pendingSnooze:${profileId}`;
   const stored = await chrome.storage.session.get(key);
-  const pending = stored[key] || { breakType: match[1], durationSeconds: EYE_BREAK_DURATION };
+  const pending = stored[key];
   await chrome.storage.session.remove(key);
+  if (!pending) return;
 
-  broadcastBreak(pending.breakType, pending.durationSeconds);
+  broadcastBreak(pending.breakType, pending.durationSeconds, pending.characterTheme, {
+    profileId,
+    title: pending.title,
+    instructions: pending.instructions,
+  });
 }
 
 // ---------------------------------------------------------------------------
