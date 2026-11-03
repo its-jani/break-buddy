@@ -12,8 +12,6 @@
     "default_popup": "popup/popup.html",
     "default_title": "BreakBuddy Settings",
     "default_icon": {
-      "16": "assets/icon.png",
-      "48": "assets/icon.png",
       "128": "assets/icon.png"
     }
   },
@@ -32,8 +30,6 @@
     }
   ],
   "icons": {
-    "16": "assets/icon.png",
-    "48": "assets/icon.png",
     "128": "assets/icon.png"
   }
 }
