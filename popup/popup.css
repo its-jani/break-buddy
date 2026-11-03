@@ -1,0 +1,153 @@
+/* BreakBuddy — popup styles */
+
+:root {
+  --bb-bg: #0f1117;
+  --bb-surface: #171a23;
+  --bb-border: rgba(255, 255, 255, 0.09);
+  --bb-text: #eef1f6;
+  --bb-text-dim: #98a1b3;
+  --bb-accent: #7dd3fc;
+  --bb-accent-strong: #38bdf8;
+  --bb-success: #4ade80;
+  --bb-error: #f87171;
+  --bb-radius: 12px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  width: 320px;
+  padding: 1rem;
+  background: var(--bb-bg);
+  color: var(--bb-text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* --- Header -------------------------------------------------------------- */
+
+.bb-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-bottom: 0.9rem;
+  margin-bottom: 0.9rem;
+  border-bottom: 1px solid var(--bb-border);
+}
+
+.bb-logo {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.bb-header h1 {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.bb-tagline {
+  font-size: 0.78rem;
+  color: var(--bb-text-dim);
+}
+
+/* --- Form ----------------------------------------------------------------- */
+
+.bb-field {
+  margin-bottom: 0.95rem;
+}
+
+.bb-field label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.bb-unit {
+  color: var(--bb-text-dim);
+  font-weight: 400;
+  font-size: 0.8em;
+}
+
+.bb-hint {
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
+  color: var(--bb-text-dim);
+}
+
+input[type="number"],
+select {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  background: var(--bb-surface);
+  color: var(--bb-text);
+  border: 1px solid var(--bb-border);
+  border-radius: var(--bb-radius);
+  font: inherit;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+input[type="number"]:focus-visible,
+select:focus-visible {
+  outline: none;
+  border-color: var(--bb-accent-strong);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+}
+
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2398a1b3' d='M6 8.5 2 4.5h8z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+  padding-right: 1.8rem;
+}
+
+/* --- Save & status ---------------------------------------------------------- */
+
+.bb-save {
+  width: 100%;
+  padding: 0.6rem;
+  margin-top: 0.25rem;
+  background: linear-gradient(135deg, var(--bb-accent-strong), #6366f1);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  border: none;
+  border-radius: var(--bb-radius);
+  cursor: pointer;
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+.bb-save:hover { filter: brightness(1.1); }
+.bb-save:active { transform: translateY(1px); }
+.bb-save:focus-visible { outline: 2px solid var(--bb-accent); outline-offset: 2px; }
+
+.bb-status {
+  min-height: 1.2em;
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.bb-status.success { color: var(--bb-success); }
+.bb-status.error { color: var(--bb-error); }
+
+/* --- Footer ------------------------------------------------------------------ */
+
+.bb-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--bb-border);
+  font-size: 0.7rem;
+  color: var(--bb-text-dim);
+}
+
+.bb-footer strong {
+  color: var(--bb-text);
+}

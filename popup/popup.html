@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BreakBuddy Settings</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="bb-header">
+    <div class="bb-logo" aria-hidden="true">☕</div>
+    <div>
+      <h1>BreakBuddy</h1>
+      <p class="bb-tagline">Rest your eyes. Move your body.</p>
+    </div>
+  </header>
+
+  <main>
+    <form id="settings-form">
+      <div class="bb-field">
+        <label for="eye-break-interval">Eye Break Interval <span class="bb-unit">(mins)</span></label>
+        <input
+          type="number"
+          id="eye-break-interval"
+          name="eyeBreakInterval"
+          min="1"
+          max="180"
+          step="1"
+          required
+        />
+        <p class="bb-hint">20-20-20 rule: look 20 ft away for 20s, every 20 mins.</p>
+      </div>
+
+      <div class="bb-field">
+        <label for="long-break-interval">Long Break Interval <span class="bb-unit">(mins)</span></label>
+        <input
+          type="number"
+          id="long-break-interval"
+          name="longBreakInterval"
+          min="1"
+          max="240"
+          step="1"
+          required
+        />
+        <p class="bb-hint">A 5-minute movement / creative break.</p>
+      </div>
+
+      <div class="bb-field">
+        <label for="character-theme">Character Theme</label>
+        <select id="character-theme" name="selectedCharacter">
+          <option value="cat">🐱 Cat</option>
+          <option value="dog">🐶 Dog</option>
+          <option value="superhero">🦸 Superhero</option>
+        </select>
+        <p class="bb-hint">Your buddy strolls across the screen during breaks.</p>
+      </div>
+
+      <button type="submit" id="save-btn" class="bb-save">Save Settings</button>
+      <p id="status" class="bb-status" role="status" aria-live="polite"></p>
+    </form>
+  </main>
+
+  <footer class="bb-footer">
+    <span>v1.0.0</span>
+    <span>Breaks fire in <strong>every</strong> window</span>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
