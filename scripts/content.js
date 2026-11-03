@@ -1,0 +1,199 @@
+/**
+ * BreakBuddy — content script
+ * Injects the full-screen Shadow DOM break overlay into every page and
+ * responds to TRIGGER_BREAK broadcasts from the background service worker.
+ */
+
+(() => {
+  if (window.__breakBuddyContentLoaded) return; // guard against double injection
+  window.__breakBuddyContentLoaded = true;
+
+  const ROOT_ID = 'break-buddy-root';
+  const ACTIVE_CLASS = 'break-buddy-active';
+
+  /** Interval id of the currently running countdown (if any). */
+  let activeTimer = null;
+
+  const BREAK_COPY = {
+    eye: {
+      title: 'Eye Rest Break',
+      instructions: 'Look at something 20 feet (about 6 meters) away for 20 seconds.',
+      emoji: '\u{1F440}', // 👀
+    },
+    long: {
+      title: 'Move & Create Break',
+      instructions: 'Stand up, stretch, grab some water — let your body and mind wander for 5 minutes.',
+      emoji: '\u{1F3C3}', // 🏃
+    },
+  };
+
+  /** Format seconds as m:ss for the countdown display. */
+  function formatCountdown(totalSeconds) {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  /** Remove the overlay (if present), clear its timers, and unlock the page. */
+  function dismissOverlay() {
+    if (activeTimer !== null) {
+      clearInterval(activeTimer);
+      activeTimer = null;
+    }
+    document.getElementById(ROOT_ID)?.remove();
+    document.documentElement.classList.remove(ACTIVE_CLASS);
+  }
+
+  /**
+   * Build and attach the full-screen break overlay inside an isolated
+   * Shadow DOM root so page CSS cannot bleed in or leak out.
+   * @param {'eye'|'long'} breakType
+   * @param {number} durationSeconds
+   * @param {string} characterTheme 'cat' | 'dog' | 'superhero'
+   */
+  function createBreakOverlay(breakType, durationSeconds, characterTheme) {
+    dismissOverlay(); // never stack two overlays
+
+    const copy = BREAK_COPY[breakType] ?? BREAK_COPY.eye;
+
+    // --- Host element ------------------------------------------------------
+    const host = document.createElement('div');
+    host.id = ROOT_ID;
+    host.style.cssText = [
+      'position:fixed',
+      'inset:0',
+      'width:100vw',
+      'height:100vh',
+      'z-index:2147483647',
+      'pointer-events:auto', // locks the overlay down and blocks the page beneath
+      'margin:0',
+      'padding:0',
+      'border:0',
+      'display:block',
+    ].join(';');
+
+    const shadow = host.attachShadow({ mode: 'open' });
+
+    // --- Scoped styles -----------------------------------------------------
+    const style = document.createElement('style');
+    style.textContent = `
+      :host { all: initial; display: block; position: fixed; inset: 0; }
+
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      .bb-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(10, 10, 15, 0.88);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.5rem;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: #f2f4f8;
+        text-align: center;
+      }
+
+      .bb-character-emoji {
+        font-size: clamp(4rem, 12vw, 8rem);
+        line-height: 1;
+        animation: bb-float 2.4s ease-in-out infinite;
+      }
+
+      .bb-title {
+        font-size: clamp(1.8rem, 4vw, 2.75rem);
+        font-weight: 700;
+        letter-spacing: 0.01em;
+      }
+
+      .bb-instructions {
+        max-width: 34rem;
+        font-size: clamp(1rem, 2vw, 1.2rem);
+        line-height: 1.6;
+        color: #b8c0cf;
+        padding: 0 1.5rem;
+      }
+
+      .bb-countdown {
+        font-variant-numeric: tabular-nums;
+        font-size: clamp(2.5rem, 6vw, 4.5rem);
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        color: #7dd3fc;
+        text-shadow: 0 0 24px rgba(125, 211, 252, 0.35);
+      }
+
+      .bb-stage {
+        /* Dynamic media container — character animation is rendered here. */
+        min-height: 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      @keyframes bb-float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-12px); }
+      }
+    `;
+
+    // --- Structure -----------------------------------------------------------
+    const backdrop = document.createElement('div');
+    backdrop.className = 'bb-backdrop';
+
+    const emoji = document.createElement('div');
+    emoji.className = 'bb-character-emoji';
+    emoji.textContent = copy.emoji;
+
+    const title = document.createElement('h1');
+    title.className = 'bb-title';
+    title.textContent = copy.title;
+
+    const instructions = document.createElement('p');
+    instructions.className = 'bb-instructions';
+    instructions.textContent = copy.instructions;
+
+    const countdown = document.createElement('div');
+    countdown.className = 'bb-countdown';
+    countdown.setAttribute('role', 'timer');
+    countdown.setAttribute('aria-live', 'polite');
+    countdown.textContent = formatCountdown(durationSeconds);
+
+    const stage = document.createElement('div');
+    stage.className = 'bb-stage';
+    stage.dataset.character = characterTheme || 'cat';
+
+    backdrop.append(emoji, title, instructions, countdown, stage);
+    shadow.append(style, backdrop);
+    document.body.appendChild(host);
+    document.documentElement.classList.add(ACTIVE_CLASS);
+
+    // --- Countdown ------------------------------------------------------------
+    let remaining = Math.max(1, Math.floor(durationSeconds));
+
+    activeTimer = setInterval(() => {
+      remaining -= 1;
+      countdown.textContent = formatCountdown(Math.max(0, remaining));
+      if (remaining <= 0) {
+        dismissOverlay();
+      }
+    }, 1000);
+
+    return { host, shadow, get timer() { return activeTimer; }, dismiss: dismissOverlay };
+  }
+
+  // --- Messaging ---------------------------------------------------------
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type === 'TRIGGER_BREAK') {
+      createBreakOverlay(message.breakType, message.durationSeconds, message.characterTheme);
+      sendResponse({ ok: true });
+    }
+    return false;
+  });
+
+  // Exposed for debugging / later phases.
+  window.__breakBuddy = { createBreakOverlay, dismissOverlay, formatCountdown };
+})();
