@@ -3,11 +3,12 @@
 **Rest your eyes. Move your body.**
 
 BreakBuddy is a Manifest V3 Chrome extension that enforces the [20-20-20 eye rest rule](https://www.aao.org/eye-health/tips-prevention/should-you-follow-20-20-20-rule)
-and regular movement breaks — with a friendly full-screen buddy instead of a nagging notification.
+and regular movement breaks — with a walk-in buddy instead of a nagging notification.
 
-When a break comes due, every tab in every browser window is covered by a full-screen overlay showing an
-animated character, the break instructions, and a live countdown. You can snooze the break by five minutes,
-skip it, or just let the countdown run out and get back to work.
+When a break comes due, a fully transparent layer covers every tab in every browser window: your page stays
+completely visible, while a character walks in from off-screen and settles along the bottom edge next to a small
+floating card with the instructions, a live countdown, and snooze / skip controls. Clicks are swallowed for the
+whole break, so you cannot accidentally work through it.
 
 ---
 
@@ -15,14 +16,17 @@ skip it, or just let the countdown run out and get back to work.
 
 | | |
 |---|---|
-| 👀 **Eye Rest Break** | 20-second overlay every 20 minutes: *look at something 20 feet (about 6 meters) away.* |
-| 🏃 **Move & Create Break** | 5-minute overlay every hour: *stand up, stretch, grab some water.* |
+| 👀 **Eye Rest Break** | 20-second break every 20 minutes: *look at something 20 feet (about 6 meters) away.* |
+| 🏃 **Move & Create Break** | 5-minute break every hour: *stand up, stretch, grab some water.* |
+| 🫥 **Transparent layer** | No dimming, tint, or blur — the page underneath stays fully visible. |
+| 🚶 **Walk-in entrance** | The buddy slides in from outside the viewport over 2.5 s and settles at the bottom edge. |
+| 🏷️ **Floating badge** | Countdown, snooze and skip live in one small card beside the buddy, not over your content. |
 | ⏰ **Custom break profiles** | Create unlimited profiles — name, interval, duration (secs or mins), and character. |
 | ⚡ **Take a break now** | Fire any preset or custom break on demand from the popup, without waiting for its timer. |
-| 🐱 **Character buddies** | Cat, Dog, or Superhero walking animation, chosen per break profile. |
+| 🐱 **Character buddies** | Two cat walk cycles (`Cat Walk 1` / `Cat Walk 2`), chosen per break profile. |
 | 🖥️ **All windows, all tabs** | One alarm in the service worker broadcasts the overlay everywhere at once. |
 | 🔕 **Snooze & skip** | Snooze the exact break for 5 minutes, or dismiss it immediately. |
-| 🛡️ **Isolated overlay** | Shadow DOM isolation + max `z-index`, so page CSS can't bleed in or fight the break. |
+| 🛡️ **Isolated, non-blocking UI** | Shadow DOM isolation + max `z-index`; the page is never reflowed or scrolled by a break. |
 | 🧰 **Pause per profile** | Toggle any custom break on or off without deleting its settings. |
 
 Defaults are conservative and fully editable; intervals are clamped to sane ranges (1–180 min for eye breaks,
@@ -73,9 +77,12 @@ The **Custom Breaks** tab is a full CRUD manager:
 
 | Control | Behaviour |
 |---|---|
-| **Snooze (5m)** | Tears down the overlay now and re-fires *this exact break* five minutes later (including its custom title and character). |
-| **Skip Break** | Dismisses the overlay only; the profile's normal schedule is untouched. |
-| *Countdown hits `00:00`* | Overlay removes itself and unlocks the page. |
+| **Snooze (5m)** | Tears down the layer now and re-fires *this exact break* five minutes later (including its custom title and character). |
+| **Skip Break** | Dismisses the layer only; the profile's normal schedule is untouched. |
+| *Countdown hits `00:00`* | The layer removes itself and the page becomes clickable again. |
+
+While a break is active, clicks, wheel and touch input are absorbed by an invisible blocker, so the page cannot
+be interacted with — but nothing about its appearance changes.
 
 ---
 
@@ -90,14 +97,13 @@ break-buddy/
 │   ├── popup.css           # Popup styling
 │   └── popup.js            # Preset + custom break CRUD, manual triggers, resync
 ├── scripts/
-│   └── content.js          # Injects the Shadow DOM break overlay on every page
+│   └── content.js          # Injects the transparent Shadow DOM break layer
 ├── styles/
-│   └── overlay.css         # Page-level lock while a break is active
+│   └── overlay.css         # Page-level rules while a break is active
 └── assets/
-    ├── icon.png            # Toolbar / extension icon (128px)
-    ├── cat_walk.webm       # Character walking animations
-    ├── dog_walk.webm
-    └── superhero_walk.webm
+    ├── cat1_walk.webm      # Character walk clips (1280x720, ~10 s loop)
+    ├── cat2_walk.webm
+    └── icon.png            # Toolbar / extension icon (128px)
 ```
 
 ## Architecture
@@ -120,12 +126,17 @@ Reads and writes the same storage keys, then asks the worker to rebuild the alar
 `TRIGGER_MANUAL_BREAK` with a resolved profile descriptor.
 
 **3. `scripts/content.js` — the presenter.**
-Listens for `TRIGGER_BREAK`, builds the overlay inside an attached Shadow Root (`#break-buddy-root`,
-`z-index: 2147483647`, `pointer-events: auto`) so host-page styles can't reach it and its own rules can't
-leak out, loads `assets/<character>_walk.webm` into the stage, ticks the countdown once per second, and
-self-dismisses at zero. `styles/overlay.css` adds `html.break-buddy-active`, which locks page scrolling and
-text selection underneath. A guard flag prevents double injection, and the static emoji is a graceful
-fallback if a WebM is missing or unsupported.
+Listens for `TRIGGER_BREAK` and builds the layer inside an attached Shadow Root (`#break-buddy-root`,
+`z-index: 2147483647`, `pointer-events: none`) so host-page styles can't reach it and its own rules can't
+leak out. The host paints nothing: a `.bb-blocker` child re-enables `pointer-events` to swallow clicks on an
+invisible full-viewport surface, and a `.bb-dock` row along the bottom holds the character tile (`.bb-stage`,
+which walks in via `@keyframes bb-walk-in` from `translateX(-100vw)`) beside the floating badge (`.bb-card`).
+`assets/<character>_walk.webm` is loaded into the tile and loops in place for the whole break; the static emoji
+is a graceful fallback if the WebM is missing or unsupported. The countdown ticks once per second and the layer
+dismisses itself at zero. A guard flag prevents double injection, and if the extension has been reloaded the
+script detects the dead context, steps aside, and lets a fresh copy re-attach. `styles/overlay.css` only stops
+text selection underneath — deliberately **no** scroll lock, because toggling `overflow` would reflow the page
+the moment the break ends.
 
 ### Messaging protocol
 
@@ -147,7 +158,7 @@ Everything lives in `chrome.storage.local`:
 | `eyeBreakDuration` | `20` | Seconds the eye overlay lasts. |
 | `longBreakInterval` | `60` | Minutes between long breaks. |
 | `longBreakDuration` | `300` | Seconds the long overlay lasts (stored in seconds, edited in minutes). |
-| `selectedCharacter` | `'cat'` | `cat` \| `dog` \| `superhero`. |
+| `selectedCharacter` | `'cat1'` | `cat1` \| `cat2`. Values from older builds (`cat`, `dog`, `superhero`) fall back to `cat1`. |
 | `customBreaks` | `[]` | Array of `{ id, name, intervalMinutes, durationSeconds, character, enabled }`. |
 
 `chrome.storage.session` holds short-lived `pendingSnooze:<id>` descriptors so a snoozed break can re-fire
@@ -166,16 +177,21 @@ you do on a page is read, collected, or transmitted anywhere.
 | `storage` | Persists settings and custom break profiles. |
 | `tabs` | Enumerates tabs across all windows to broadcast the overlay. |
 | `scripting` | Injects the overlay on demand into tabs that have no content script yet (e.g. tabs opened before install), then retries the trigger once. |
-| `<all_urls>` (host) | The break overlay must be able to appear on any page you are working on. |
+| `<all_urls>` (host) | The break layer must be able to appear on any page you are working on. |
 
 ## Known limitations
 
+- **The walk clips are not transparent.** `assets/cat1_walk.webm` and `assets/cat2_walk.webm` are
+  `VP9 / 1280x720 / yuv420p` — the pixel format carries **no alpha channel**, so the clips have an opaque black
+  background. They are therefore presented inside a small contained tile (`border-radius`, border, shadow) rather
+  than floated over the page, which would otherwise paint a black rectangle across the viewport. Re-export the
+  walks from the original green-screen source with an alpha plane (`VP9` + `yuva420p`) and the tile framing can be
+  dropped in one CSS change.
+- **Only two buddies.** The dog and superhero themes were retired when their assets were removed; anything saved
+  with those values renders as `cat1`.
 - **Internal pages can't be covered.** Browsers forbid content scripts on `chrome://`, `edge://`,
   `devtools://`, the Web Store, and similar pages. A break that comes due while you are only on such pages
   will not be visible there (it still fires in every normal tab).
-- **Placeholder character animations.** The `*_walk.webm` files in `assets/` are tiny placeholders, so the
-  overlay currently falls back to the static emoji. Drop real transparent WebM walking loops named
-  `cat_walk.webm`, `dog_walk.webm`, and `superhero_walk.webm` into `assets/` to light up the buddy animation.
 - **Chrome only.** Tested as a Chromium MV3 extension; it has not been validated on Firefox or Safari.
 - Only a single 128px icon is supplied; Chrome scales it for the other sizes.
 
@@ -184,12 +200,27 @@ you do on a page is read, collected, or transmitted anywhere.
 - Load the folder unpacked and hit **Reload** on `chrome://extensions` after each edit.
 - Service-worker logs (`[BreakBuddy] …`) appear in the *Inspect views → service worker* console — useful for
   confirming how many alarms were scheduled and which break fired.
-- Layout conventions worth keeping: the overlay markup and its CSS live *inside* `content.js`'s Shadow Root
+- Layout conventions worth keeping: the layer markup and its CSS live *inside* `content.js`'s Shadow Root
   (so there is no separate overlay stylesheet to fetch), while `styles/overlay.css` is reserved for rules that
   must apply to the host document.
 - This repo follows Conventional Commits with milestone-sized, atomic commits.
 
+### Manual test checklist
+
+Set an eye-break interval to `1` minute (or use **⚡ Take Break Now**) and confirm:
+
+1. The page behind the buddy is fully readable — no dimming, no blur, no scroll jump.
+2. The tile walks in from the left edge over ~2.5 s and settles at the bottom.
+3. Clicking links, buttons, and text on the page does nothing, but wheel/scroll input is also absorbed.
+4. The badge appears beside the buddy only after it lands, and its buttons still work.
+5. **Snooze (5m)** shows "Snoozed 5 minutes." and re-fires the same break five minutes later.
+6. **Skip Break** dismisses instantly; letting the countdown reach `00:00` dismisses on its own.
+7. Open a second window — the break must appear in both, at the same moment.
+8. Reload the extension, then trigger a break in a tab that was already open — it should still work (the
+   background re-injects the content script on demand).
+
 ## Version
 
-**v1.1.0** — adds custom break profiles, on-demand break triggers, and dynamic multi-alarm rescheduling on top
-of the v1.0.0 20-20-20 core.
+**v1.2.0** — transparent break layer with a walk-in character tile and a floating badge, real cat walk assets,
+and a two-buddy roster (`cat1` / `cat2`). Builds on v1.1.0 (custom break profiles, on-demand triggers,
+multi-alarm rescheduling) and v1.0.0 (the 20-20-20 core).

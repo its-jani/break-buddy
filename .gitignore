@@ -1,0 +1,6 @@
+# Scratch output from local media/frame inspection — never part of the extension.
+.qa-frames/
+
+# Local environment noise
+.DS_Store
+Thumbs.db

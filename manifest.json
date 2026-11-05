@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "BreakBuddy",
-  "version": "1.1.0",
-  "description": "Enforces the 20-20-20 eye rest rule and movement breaks with a friendly full-screen character buddy. Supports custom break profiles and on-demand breaks.",
+  "version": "1.2.0",
+  "description": "Enforces the 20-20-20 eye rest rule and movement breaks with a walk-in character buddy over a fully transparent layer, so your page stays visible. Supports custom break profiles and on-demand breaks.",
   "permissions": ["alarms", "storage", "tabs", "scripting"],
   "host_permissions": ["<all_urls>"],
   "background": {
