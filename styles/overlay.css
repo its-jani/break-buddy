@@ -1,14 +1,24 @@
 /*
  * BreakBuddy — page-level styles applied while a break overlay is active.
- * The overlay itself lives inside the Shadow DOM of #break-buddy-root;
- * these rules tame the underlying document during a break.
+ * The overlay lives inside the Shadow DOM of #break-buddy-root and is fully
+ * transparent, so the document must stay exactly as the user left it: no
+ * scroll lock (that would reflow the page once the break ends) and no tint.
+ *
+ * Interaction isolation is handled in two places: the transparent click
+ * blocker in the Shadow DOM swallows pointer input, and the rules below stop
+ * the page's own text selection / drag behaviour from reacting underneath.
  */
 
 html.break-buddy-active,
 html.break-buddy-active body {
-  overflow: hidden !important;
+  user-select: none !important;
 }
 
 html.break-buddy-active * {
   user-select: none !important;
+}
+
+/* Keep page content visually untouched — the break never hides or moves it. */
+html.break-buddy-active {
+  scroll-behavior: auto !important;
 }
