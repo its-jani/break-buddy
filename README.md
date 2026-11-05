@@ -6,9 +6,9 @@ BreakBuddy is a Manifest V3 Chrome extension that enforces the [20-20-20 eye res
 and regular movement breaks — with a walk-in buddy instead of a nagging notification.
 
 When a break comes due, a fully transparent layer covers every tab in every browser window: your page stays
-completely visible, while a character walks in from off-screen and settles along the bottom edge next to a small
-floating card with the instructions, a live countdown, and snooze / skip controls. Clicks are swallowed for the
-whole break, so you cannot accidentally work through it.
+completely visible, while a character walks in from off-screen and fills the centre of the tab. Above it sits the
+break name in giant block capitals and an even larger countdown, with the snooze / skip buttons underneath.
+Clicks are swallowed for the whole break, so you cannot accidentally work through it.
 
 ---
 
@@ -19,8 +19,9 @@ whole break, so you cannot accidentally work through it.
 | 👀 **Eye Rest Break** | 20-second break every 20 minutes: *look at something 20 feet (about 6 meters) away.* |
 | 🏃 **Move & Create Break** | 5-minute break every hour: *stand up, stretch, grab some water.* |
 | 🫥 **Transparent layer** | No dimming, tint, or blur — the page underneath stays fully visible. |
-| 🚶 **Walk-in entrance** | The buddy slides in from outside the viewport over 2.5 s and settles at the bottom edge. |
-| 🏷️ **Floating badge** | Countdown, snooze and skip live in one small card beside the buddy, not over your content. |
+| 🚶 **Walk-in entrance** | The buddy slides in from outside the viewport over 2.5 s and fills the centre of the tab. |
+| 🔢 **Giant timer** | Break name in 900-weight uppercase block letters, countdown up to 8rem in `#38bdf8`. |
+| 🛑 **Single walk** | The clip plays once and holds the final resting frame — no looping for the whole break. |
 | ⏰ **Custom break profiles** | Create unlimited profiles — name, interval, duration (secs or mins), and character. |
 | ⚡ **Take a break now** | Fire any preset or custom break on demand from the popup, without waiting for its timer. |
 | 🐱 **Character buddies** | Two cat walk cycles (`Cat Walk 1` / `Cat Walk 2`), chosen per break profile. |
@@ -82,7 +83,8 @@ The **Custom Breaks** tab is a full CRUD manager:
 | *Countdown hits `00:00`* | The layer removes itself and the page becomes clickable again. |
 
 While a break is active, clicks, wheel and touch input are absorbed by an invisible blocker, so the page cannot
-be interacted with — but nothing about its appearance changes.
+be interacted with — but nothing about its appearance changes. The only clickable things in the layer are the
+**Snooze** and **Skip Break** buttons.
 
 ---
 
@@ -129,10 +131,13 @@ Reads and writes the same storage keys, then asks the worker to rebuild the alar
 Listens for `TRIGGER_BREAK` and builds the layer inside an attached Shadow Root (`#break-buddy-root`,
 `z-index: 2147483647`, `pointer-events: none`) so host-page styles can't reach it and its own rules can't
 leak out. The host paints nothing: a `.bb-blocker` child re-enables `pointer-events` to swallow clicks on an
-invisible full-viewport surface, and a `.bb-dock` row along the bottom holds the character tile (`.bb-stage`,
-which walks in via `@keyframes bb-walk-in` from `translateX(-100vw)`) beside the floating badge (`.bb-card`).
-`assets/<character>_walk.webm` is loaded into the tile and loops in place for the whole break; the static emoji
-is a graceful fallback if the WebM is missing or unsupported. The countdown ticks once per second and the layer
+invisible full-viewport surface, and a viewport-sized `.bb-dock` centres two stacked children — the large
+character stage (`.bb-stage`, which walks in via `@keyframes bb-walk-in` from `translateX(-100vw)`) and the
+break-info block (`.bb-card`) carrying the uppercase title, instructions, giant countdown, and buttons.
+The stage and the text are pointer-transparent; only the blocker and the `.bb-btn` actions accept clicks.
+`assets/<character>_walk.webm` is loaded with `loop = false` and paused by a `timeupdate` listener just short of
+the clip's end, so the buddy holds its final resting frame for the rest of the break; the static emoji is a
+graceful fallback if the WebM is missing or unsupported. The countdown ticks once per second and the layer
 dismisses itself at zero. A guard flag prevents double injection, and if the extension has been reloaded the
 script detects the dead context, steps aside, and lets a fresh copy re-attach. `styles/overlay.css` only stops
 text selection underneath — deliberately **no** scroll lock, because toggling `overflow` would reflow the page
@@ -183,10 +188,12 @@ you do on a page is read, collected, or transmitted anywhere.
 
 - **The walk clips are not transparent.** `assets/cat1_walk.webm` and `assets/cat2_walk.webm` are
   `VP9 / 1280x720 / yuv420p` — the pixel format carries **no alpha channel**, so the clips have an opaque black
-  background. They are therefore presented inside a small contained tile (`border-radius`, border, shadow) rather
-  than floated over the page, which would otherwise paint a black rectangle across the viewport. Re-export the
-  walks from the original green-screen source with an alpha plane (`VP9` + `yuva420p`) and the tile framing can be
-  dropped in one CSS change.
+  background. They now play at full stage scale (`min(85vw, 750px)`) with no framing chrome, so that black
+  background is part of what you see. Re-export the walks from the original green-screen source with an alpha
+  plane (`VP9` + `yuva420p`) and the clip will float over the page cleanly with no code change.
+- **The resting frame needs a break longer than the clip.** The walk holds its final frame only after the clip
+  has finished, so a break whose duration is shorter than the ~10 s clip (e.g. a 5-second custom break) dismisses
+  before the cat ever stops walking.
 - **Only two buddies.** The dog and superhero themes were retired when their assets were removed; anything saved
   with those values renders as `cat1`.
 - **Internal pages can't be covered.** Browsers forbid content scripts on `chrome://`, `edge://`,
@@ -210,17 +217,19 @@ you do on a page is read, collected, or transmitted anywhere.
 Set an eye-break interval to `1` minute (or use **⚡ Take Break Now**) and confirm:
 
 1. The page behind the buddy is fully readable — no dimming, no blur, no scroll jump.
-2. The tile walks in from the left edge over ~2.5 s and settles at the bottom.
+2. The stage walks in from the left edge over ~2.5 s and stops centred, filling most of the tab.
 3. Clicking links, buttons, and text on the page does nothing, but wheel/scroll input is also absorbed.
-4. The badge appears beside the buddy only after it lands, and its buttons still work.
-5. **Snooze (5m)** shows "Snoozed 5 minutes." and re-fires the same break five minutes later.
-6. **Skip Break** dismisses instantly; letting the countdown reach `00:00` dismisses on its own.
-7. Open a second window — the break must appear in both, at the same moment.
-8. Reload the extension, then trigger a break in a tab that was already open — it should still work (the
+4. The title and giant timer appear above the buddy only after it lands, and the two buttons still work.
+5. The cat stops walking after one pass through the clip and stays parked for the rest of the break.
+6. **Snooze (5m)** shows "Snoozed 5 minutes." and re-fires the same break five minutes later.
+7. **Skip Break** dismisses instantly; letting the countdown reach `00:00` dismisses on its own.
+8. Open a second window — the break must appear in both, at the same moment.
+9. Reload the extension, then trigger a break in a tab that was already open — it should still work (the
    background re-injects the content script on demand).
 
 ## Version
 
-**v1.2.0** — transparent break layer with a walk-in character tile and a floating badge, real cat walk assets,
-and a two-buddy roster (`cat1` / `cat2`). Builds on v1.1.0 (custom break profiles, on-demand triggers,
-multi-alarm rescheduling) and v1.0.0 (the 20-20-20 core).
+**v1.2.0** — transparent break layer with a large walk-in character stage, a single-play walk that holds the
+resting frame, and a giant block-letter countdown; real cat walk assets and a two-buddy roster (`cat1` /
+`cat2`). Builds on v1.1.0 (custom break profiles, on-demand triggers, multi-alarm rescheduling) and v1.0.0
+(the 20-20-20 core).
