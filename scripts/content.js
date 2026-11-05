@@ -3,12 +3,16 @@
  * Injects a fully transparent Shadow DOM break layer into every page and
  * responds to TRIGGER_BREAK broadcasts from the background service worker.
  *
- * The page stays completely visible: there is no dimming, no tint, and no
- * blur. A character walks in from outside the viewport, rests at the bottom
- * of the screen, and the countdown / snooze / skip controls live in a small
- * floating badge beside it. Clicks are still swallowed for the whole break —
- * pointer-events are disabled on the layer and re-enabled only on the
- * transparent click-blocker and the badge.
+ * The page itself is never dimmed: there is no tint, no veil, and no blur
+ * anywhere in the layer. A buddy walks in from outside the viewport, settles
+ * at the bottom of the screen, and the countdown / snooze / skip controls live
+ * in a small floating badge beside it. Clicks are still swallowed for the
+ * whole break — pointer-events are disabled on the layer and re-enabled only
+ * on the transparent click-blocker and the floating UI.
+ *
+ * Character media note: the shipped WebM walks are opaque 16:9 clips with a
+ * black background (no alpha plane), so they are presented inside a small
+ * contained video tile instead of being allowed to cover the viewport.
  */
 
 (() => {
@@ -17,9 +21,6 @@
 
   const ROOT_ID = 'break-buddy-root';
   const ACTIVE_CLASS = 'break-buddy-active';
-
-  /** Must stay in sync with the bb-walk-in duration in the scoped styles. */
-  const WALK_IN_MS = 2500;
 
   /** Interval id of the currently running countdown (if any). */
   let activeTimer = null;
@@ -61,22 +62,35 @@
   }
 
   /** Character themes that have a matching assets/<theme>_walk.webm file. */
-  const VALID_CHARACTERS = ['cat', 'dog', 'superhero'];
+  const VALID_CHARACTERS = ['cat1', 'cat2'];
+  const DEFAULT_CHARACTER = 'cat1';
 
   /**
-   * Load the walking character animation into the overlay stage.
+   * False once the extension has been reloaded/uninstalled, which leaves this
+   * script orphaned and every chrome.runtime call throwing synchronously.
+   */
+  function isContextAlive() {
+    try {
+      return !!(chrome?.runtime?.id);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Load the walking character animation into the overlay tile.
    * Falls back to the static emoji if the WebM is missing or unsupported.
    * @param {HTMLElement} stage
    * @param {string} characterTheme
    * @param {HTMLElement} emojiFallback
    */
   function populateStage(stage, characterTheme, emojiFallback) {
-    const theme = VALID_CHARACTERS.includes(characterTheme) ? characterTheme : 'cat';
+    const theme = VALID_CHARACTERS.includes(characterTheme) ? characterTheme : DEFAULT_CHARACTER;
     const src = chrome.runtime.getURL(`assets/${theme}_walk.webm`);
 
     const video = document.createElement('video');
     video.autoplay = true;
-    video.loop = true;
+    video.loop = true; // the walk is an in-place cycle — keep it stepping
     video.muted = true;
     video.playsInline = true;
     video.setAttribute('playsinline', '');
@@ -102,7 +116,7 @@
    * root so page CSS cannot bleed in or leak out.
    * @param {'eye'|'long'|'custom'} breakType
    * @param {number} durationSeconds
-   * @param {string} characterTheme 'cat' | 'dog' | 'superhero'
+   * @param {string} characterTheme 'cat1' | 'cat2'
    * @param {{title?: string, instructions?: string, profileId?: string}} [options]
    */
   function createBreakOverlay(breakType, durationSeconds, characterTheme, options = {}) {
@@ -115,7 +129,7 @@
 
     // --- Host element ------------------------------------------------------
     // Transparent and pointer-events:none by default, so page content shows
-    // through untouched everywhere except the blocker and the badge below.
+    // through untouched everywhere except the blocker and the floating UI.
     const host = document.createElement('div');
     host.id = ROOT_ID;
     host.style.cssText = [
@@ -151,7 +165,7 @@
         touch-action: none;
       }
 
-      /* Character + badge ride in together along the bottom of the viewport. */
+      /* Character tile + badge ride in together along the bottom of the viewport. */
       .bb-dock {
         position: absolute;
         left: 0;
@@ -160,7 +174,7 @@
         display: flex;
         align-items: flex-end;
         justify-content: center;
-        gap: 1.25rem;
+        gap: 1rem;
         padding: 0 1.25rem;
         font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
         color: #f2f4f8;
@@ -168,23 +182,33 @@
       }
 
       .bb-stage {
-        /* Dynamic media container — the walking buddy is rendered here. */
+        /* Contained video tile. The shipped walks are opaque, so the media is
+           framed as a deliberate small card instead of covering the viewport. */
         position: relative;
         flex: 0 0 auto;
-        min-height: 6rem;
-        min-width: 4.5rem; /* keeps a footprint when only the emoji shows */
+        min-width: 5rem;
+        min-height: 5rem;
         display: flex;
-        align-items: flex-end;
+        align-items: center;
         justify-content: center;
+        padding: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 16px;
+        background: #0b0d12;
+        box-shadow: 0 14px 32px rgba(0, 0, 0, 0.32);
+        overflow: hidden;
         transform: translateX(-100vw); /* start outside the viewport... */
         animation: bb-walk-in 2.5s cubic-bezier(0.22, 0.68, 0.24, 1) forwards;
       }
 
       .bb-stage video {
-        width: min(40vw, 300px);
+        display: block;
+        width: min(34vw, 240px);
+        aspect-ratio: 16 / 9;
         height: auto;
-        transform-origin: 50% 100%;
-        filter: drop-shadow(0px 10px 14px rgba(0, 0, 0, 0.35));
+        object-fit: cover;
+        object-position: 50% 62%; /* the buddy sits low-centre in the source frame */
+        border-radius: 10px;
       }
 
       /* Mirror the buddy so it faces the direction it travels when needed. */
@@ -192,33 +216,23 @@
         transform: scaleX(-1);
       }
 
-      /* Freeze on the last frame once the walk-in ends — the "sitting" pose. */
-      .bb-stage.bb-resting {
-        animation: none;
-        transform: none;
-      }
-
-      .bb-stage.bb-resting video {
-        filter: drop-shadow(0px 4px 8px rgba(0, 0, 0, 0.3));
-      }
-
       .bb-character-emoji {
-        /* Absolute so the fallback never widens the stage — the buddy and the
-           badge stay aligned whether the WebM loads or not. */
+        /* Absolute so the fallback never resizes the tile — the badge and the
+           buddy stay aligned whether the WebM loads or not. */
         position: absolute;
         inset: 0;
         display: flex;
-        align-items: flex-end;
+        align-items: center;
         justify-content: center;
-        font-size: clamp(3rem, 10vw, 6rem);
+        font-size: clamp(2.5rem, 8vw, 4.5rem);
         line-height: 1;
       }
 
       /* --- Minimalist floating badge -------------------------------------- */
       .bb-card {
         pointer-events: auto;
-        flex: 0 1 20rem;
-        max-width: 21rem;
+        flex: 0 1 19rem;
+        max-width: 20rem;
         display: flex;
         flex-direction: column;
         gap: 0.45rem;
@@ -228,8 +242,7 @@
         box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
         opacity: 0;
         transform: translateY(0.6rem);
-        animation: bb-badge-in 450ms ease-out forwards;
-        animation-delay: 2.1s; /* lands once the buddy has settled */
+        animation: bb-badge-in 450ms ease-out 2.1s forwards; /* lands as the buddy settles */
       }
 
       .bb-title {
@@ -298,10 +311,8 @@
 
       @media (prefers-reduced-motion: reduce) {
         .bb-stage,
-        .bb-character-emoji,
         .bb-card {
           animation: none !important;
-          animation-delay: 0ms !important;
           transform: none !important;
           opacity: 1 !important;
         }
@@ -315,7 +326,7 @@
         }
 
         .bb-stage video {
-          width: min(60vw, 200px);
+          width: min(58vw, 200px);
         }
 
         .bb-card {
@@ -327,8 +338,8 @@
         }
       }
 
-      /* Walk from far outside the viewport to the resting spot. A percentage
-         of the element's own width is added so it clears the edge first. */
+      /* Walk in from far outside the viewport to the resting spot along the
+         bottom edge. The tile travels as one unit, media and all. */
       @keyframes bb-walk-in {
         from { transform: translateX(-100vw); }
         to { transform: translateX(0); }
@@ -355,7 +366,9 @@
 
     const stage = document.createElement('div');
     stage.className = 'bb-stage';
-    stage.dataset.character = characterTheme || 'cat';
+    stage.dataset.character = VALID_CHARACTERS.includes(characterTheme)
+      ? characterTheme
+      : DEFAULT_CHARACTER;
 
     const emoji = document.createElement('div');
     emoji.className = 'bb-character-emoji';
@@ -442,33 +455,11 @@
     document.documentElement.classList.add(ACTIVE_CLASS);
 
     // --- Interaction isolation -------------------------------------------
-    // The badge never scrolls the page, and wheel/keyboard input on the
+    // The badge never scrolls the page, and wheel/touch input on the
     // transparent blocker cannot reach the document underneath.
     blocker.addEventListener('wheel', (event) => event.preventDefault(), { passive: false });
     blocker.addEventListener('touchmove', (event) => event.preventDefault(), { passive: false });
     card.addEventListener('wheel', (event) => event.preventDefault(), { passive: false });
-
-    // --- Walk-in completion ------------------------------------------------
-    // Once the buddy has arrived, freeze it on the last walking frame so it
-    // "sits" for the rest of the break instead of looping in place.
-    setTimeout(() => {
-      if (!stage.isConnected) return;
-      // .bb-resting releases the walk-in transform; the badge is already down.
-      stage.classList.add('bb-resting');
-
-      const video = stage.querySelector('video');
-      if (video) {
-        video.loop = false;
-        if (video.readyState >= 1) {
-          try {
-            video.currentTime = Math.max(0, (video.duration || 0) - 0.05);
-          } catch {
-            /* seek unsupported — the video simply ends on its own */
-          }
-        }
-        video.addEventListener('ended', () => video.pause());
-      }
-    }, WALK_IN_MS);
 
     // --- Countdown ------------------------------------------------------------
     let remaining = Math.max(1, Math.floor(durationSeconds));
@@ -485,6 +476,13 @@
   }
 
   // --- Messaging ---------------------------------------------------------
+  if (!isContextAlive()) {
+    // Orphaned script from a previous build: drop the guard flag so the
+    // reloaded extension can inject a fresh, connected copy into this page.
+    window.__breakBuddyContentLoaded = false;
+    return;
+  }
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === 'TRIGGER_BREAK') {
       createBreakOverlay(message.breakType, message.durationSeconds, message.characterTheme, {

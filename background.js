@@ -30,7 +30,7 @@ const DEFAULT_SETTINGS = {
   eyeBreakDuration: EYE_BREAK_DURATION, // seconds the eye overlay lasts
   longBreakInterval: 60, // minutes between long breaks
   longBreakDuration: LONG_BREAK_DURATION, // seconds the long overlay lasts
-  selectedCharacter: 'cat', // 'cat' | 'dog' | 'superhero'
+  selectedCharacter: 'cat1', // 'cat1' | 'cat2' — must match assets/<theme>_walk.webm
 };
 
 // Shape of a stored custom break profile:
@@ -79,7 +79,7 @@ async function getBreakProfiles() {
     name: cb.name || 'Custom Break',
     intervalMinutes: cb.intervalMinutes,
     durationSeconds: cb.durationSeconds,
-    character: cb.character || data.selectedCharacter,
+    character: cb.character || data.selectedCharacter || 'cat1',
     enabled: cb.enabled !== false,
   }));
 

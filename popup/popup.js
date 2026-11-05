@@ -10,11 +10,11 @@ const DEFAULT_SETTINGS = {
   eyeBreakDuration: 20, // seconds
   longBreakInterval: 60,
   longBreakDuration: 300, // seconds
-  selectedCharacter: 'cat',
+  selectedCharacter: 'cat1',
 };
 
-const CHARACTERS = ['cat', 'dog', 'superhero'];
-const CHARACTER_EMOJI = { cat: '🐱', dog: '🐶', superhero: '🦸' };
+const CHARACTERS = ['cat1', 'cat2'];
+const CHARACTER_EMOJI = { cat1: '🐱', cat2: '😸' };
 
 // --- DOM references --------------------------------------------------------
 const $ = (id) => document.getElementById(id);
@@ -100,7 +100,10 @@ async function loadPresets() {
   eyeDuration.value = settings.eyeBreakDuration; // seconds
   longInterval.value = settings.longBreakInterval;
   longDuration.value = Math.max(1, Math.round(settings.longBreakDuration / 60)); // show minutes
-  characterSelect.value = settings.selectedCharacter;
+  // Older builds stored cat/dog/superhero; map anything unknown to the default buddy.
+  characterSelect.value = CHARACTERS.includes(settings.selectedCharacter)
+    ? settings.selectedCharacter
+    : CHARACTERS[0];
 }
 
 defaultsForm.addEventListener('submit', async (event) => {
@@ -275,7 +278,7 @@ function openModal(profile) {
       customDurationUnit.value = 'sec';
       customDuration.value = profile.durationSeconds;
     }
-    customCharacter.value = profile.character;
+    customCharacter.value = CHARACTERS.includes(profile.character) ? profile.character : CHARACTERS[0];
   } else {
     modalTitle.textContent = 'Add Custom Break';
     customIdInput.value = '';
@@ -307,7 +310,7 @@ customForm.addEventListener('submit', async (event) => {
   if (intervalMinutes < 1) return setStatus('Interval must be at least 1 minute.', 'error');
   if (durationSeconds < 1) return setStatus('Duration must be at least 1 second.', 'error');
 
-  const character = CHARACTERS.includes(customCharacter.value) ? customCharacter.value : 'cat';
+  const character = CHARACTERS.includes(customCharacter.value) ? customCharacter.value : CHARACTERS[0];
   const list = await getCustomBreaks();
   const editingId = customIdInput.value;
 
