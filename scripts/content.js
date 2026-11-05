@@ -4,15 +4,15 @@
  * responds to TRIGGER_BREAK broadcasts from the background service worker.
  *
  * The page itself is never dimmed: there is no tint, no veil, and no blur
- * anywhere in the layer. A buddy walks in from outside the viewport, settles
- * at the bottom of the screen, and the countdown / snooze / skip controls live
- * in a small floating badge beside it. Clicks are still swallowed for the
- * whole break — pointer-events are disabled on the layer and re-enabled only
- * on the transparent click-blocker and the floating UI.
+ * anywhere in the layer. The buddy walks in from outside the viewport, fills
+ * the centre of the tab, and the giant countdown / snooze / skip controls sit
+ * directly above it. Only the action buttons are interactive — everything else
+ * in the layer is pointer-transparent, and an invisible blocker absorbs clicks
+ * so the page underneath cannot be used during the break.
  *
  * Character media note: the shipped WebM walks are opaque 16:9 clips with a
- * black background (no alpha plane), so they are presented inside a small
- * contained video tile instead of being allowed to cover the viewport.
+ * black background (no alpha plane). They play exactly once and hold the final
+ * resting frame rather than looping.
  */
 
 (() => {
@@ -78,7 +78,8 @@
   }
 
   /**
-   * Load the walking character animation into the overlay tile.
+   * Load the walking character animation into the overlay stage.
+   * The clip plays once and is held on its final resting frame.
    * Falls back to the static emoji if the WebM is missing or unsupported.
    * @param {HTMLElement} stage
    * @param {string} characterTheme
@@ -90,7 +91,7 @@
 
     const video = document.createElement('video');
     video.autoplay = true;
-    video.loop = true; // the walk is an in-place cycle — keep it stepping
+    video.loop = false; // walk once, then hold the resting frame
     video.muted = true;
     video.playsInline = true;
     video.setAttribute('playsinline', '');
@@ -107,6 +108,20 @@
     video.addEventListener('error', () => {
       video.remove();
     });
+
+    // Walk once and stop: pause just short of the clip's end so the buddy
+    // stays parked on the final resting frame for the rest of the break.
+    video.addEventListener('timeupdate', () => {
+      const tail = Number(video.duration);
+      if (!Number.isFinite(tail) || video.paused) return;
+      if (video.currentTime >= tail - 0.15) {
+        video.pause();
+        video.currentTime = tail; // land exactly on the last frame
+      }
+    });
+
+    // Safety net for streams where duration is unknown or timeupdate is throttled.
+    video.addEventListener('ended', () => video.pause());
 
     stage.appendChild(video);
   }
@@ -128,8 +143,8 @@
     const instructionsText = options.instructions || copy.instructions;
 
     // --- Host element ------------------------------------------------------
-    // Transparent and pointer-events:none by default, so page content shows
-    // through untouched everywhere except the blocker and the floating UI.
+    // Transparent and pointer-events:none, so only the opt-in children (the
+    // blocker and the action buttons) ever receive a click.
     const host = document.createElement('div');
     host.id = ROOT_ID;
     host.style.cssText = [
@@ -165,50 +180,43 @@
         touch-action: none;
       }
 
-      /* Character tile + badge ride in together along the bottom of the viewport. */
+      /* Buddy + giant countdown are centred as one stack over the viewport. */
       .bb-dock {
         position: absolute;
-        left: 0;
-        right: 0;
-        bottom: 4vh;
+        inset: 0;
         display: flex;
-        align-items: flex-end;
+        flex-direction: column;
+        align-items: center;
         justify-content: center;
         gap: 1rem;
-        padding: 0 1.25rem;
+        padding: 2vh 2vw;
+        overflow: hidden; /* the giant type never spills past the viewport */
         font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
         color: #f2f4f8;
-        text-align: left;
+        text-align: center;
       }
 
       .bb-stage {
-        /* Contained video tile. The shipped walks are opaque, so the media is
-           framed as a deliberate small card instead of covering the viewport. */
+        /* Stage media. Framing is stripped back — no border, plate, or card
+           shadow — so the clip reads as the break, not as a widget. */
         position: relative;
         flex: 0 0 auto;
-        min-width: 5rem;
+        width: min(85vw, 750px);
         min-height: 5rem;
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 6px;
-        border: 1px solid rgba(255, 255, 255, 0.16);
-        border-radius: 16px;
-        background: #0b0d12;
-        box-shadow: 0 14px 32px rgba(0, 0, 0, 0.32);
-        overflow: hidden;
         transform: translateX(-100vw); /* start outside the viewport... */
         animation: bb-walk-in 2.5s cubic-bezier(0.22, 0.68, 0.24, 1) forwards;
       }
 
       .bb-stage video {
         display: block;
-        width: min(34vw, 240px);
+        width: 100%;
+        max-height: 46vh;
         aspect-ratio: 16 / 9;
-        height: auto;
         object-fit: cover;
         object-position: 50% 62%; /* the buddy sits low-centre in the source frame */
-        border-radius: 10px;
       }
 
       /* Mirror the buddy so it faces the direction it travels when needed. */
@@ -217,54 +225,58 @@
       }
 
       .bb-character-emoji {
-        /* Absolute so the fallback never resizes the tile — the badge and the
-           buddy stay aligned whether the WebM loads or not. */
+        /* Absolute so the fallback never resizes the stage. */
         position: absolute;
         inset: 0;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: clamp(2.5rem, 8vw, 4.5rem);
+        font-size: clamp(4rem, 18vw, 12rem);
         line-height: 1;
       }
 
-      /* --- Minimalist floating badge -------------------------------------- */
+      /* --- Break info + giant timer ----------------------------------------- */
       .bb-card {
-        pointer-events: auto;
-        flex: 0 1 19rem;
-        max-width: 20rem;
+        /* Not interactive: only the action buttons opt back into pointer events. */
+        pointer-events: none;
+        flex: 0 0 auto;
+        width: min(85vw, 750px);
         display: flex;
         flex-direction: column;
-        gap: 0.45rem;
-        padding: 0.85rem 1rem;
-        border-radius: 16px;
-        background: rgba(17, 22, 31, 0.88);
-        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+        align-items: center;
+        gap: 0.35rem;
         opacity: 0;
         transform: translateY(0.6rem);
         animation: bb-badge-in 450ms ease-out 2.1s forwards; /* lands as the buddy settles */
       }
 
       .bb-title {
-        font-size: 0.95rem;
-        font-weight: 700;
-        letter-spacing: 0.01em;
-        color: #f2f4f8;
+        font-size: clamp(3rem, 6vw, 4.5rem);
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        line-height: 1.05;
+        color: #ffffff;
+        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85), 0 0 28px rgba(0, 0, 0, 0.55);
       }
 
       .bb-instructions {
-        font-size: 0.8rem;
-        line-height: 1.45;
-        color: #b8c0cf;
+        max-width: 30ch;
+        font-size: clamp(1rem, 2.2vw, 1.5rem);
+        font-weight: 700;
+        line-height: 1.35;
+        color: #e6edf6;
+        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
       }
 
       .bb-countdown {
         font-variant-numeric: tabular-nums;
-        font-size: 1.9rem;
-        font-weight: 800;
-        letter-spacing: 0.04em;
-        line-height: 1.1;
-        color: #7dd3fc;
+        font-size: clamp(6rem, 16vw, 8rem);
+        font-weight: 900;
+        letter-spacing: 2px;
+        line-height: 1;
+        color: #38bdf8;
+        text-shadow: 0 4px 14px rgba(0, 0, 0, 0.85), 0 0 46px rgba(56, 189, 248, 0.45);
       }
 
       .bb-actions {
@@ -274,12 +286,15 @@
       }
 
       .bb-btn {
+        pointer-events: auto; /* the only interactive surface in the layer */
         appearance: none;
-        border: 1px solid rgba(255, 255, 255, 0.18);
+        border: 1px solid rgba(255, 255, 255, 0.28);
         border-radius: 999px;
-        padding: 0.4rem 0.9rem;
-        font-size: 0.82rem;
-        font-weight: 600;
+        padding: 0.7rem 1.7rem;
+        font-size: 1.05rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 1px;
         font-family: inherit;
         cursor: pointer;
         transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
@@ -289,24 +304,26 @@
       .bb-btn:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
 
       .bb-btn--snooze {
-        background: rgba(125, 211, 252, 0.16);
-        color: #bae6fd;
-        border-color: rgba(125, 211, 252, 0.4);
+        background: #0ea5e9;
+        color: #04222f;
+        border-color: rgba(255, 255, 255, 0.45);
       }
 
-      .bb-btn--snooze:hover { background: rgba(125, 211, 252, 0.28); }
+      .bb-btn--snooze:hover { background: #38bdf8; }
 
       .bb-btn--skip {
-        background: transparent;
-        color: #9aa3b2;
+        background: rgba(15, 23, 42, 0.78);
+        color: #e2e8f0;
       }
 
-      .bb-btn--skip:hover { background: rgba(255, 255, 255, 0.08); color: #d7dbe2; }
+      .bb-btn--skip:hover { background: rgba(15, 23, 42, 0.92); color: #ffffff; }
 
       .bb-note {
-        font-size: 0.75rem;
-        color: #7dd3fc;
-        min-height: 1.1em;
+        font-size: 1rem;
+        font-weight: 700;
+        color: #bae6fd;
+        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
+        min-height: 1.2em;
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -319,27 +336,26 @@
       }
 
       @media (max-width: 720px) {
-        .bb-dock {
-          flex-direction: column;
-          align-items: center;
-          gap: 0.75rem;
-        }
-
-        .bb-stage video {
-          width: min(58vw, 200px);
-        }
-
         .bb-card {
-          flex: 0 0 auto;
-          width: min(92vw, 22rem);
-          max-width: none;
-          align-items: center;
-          text-align: center;
+          gap: 0.25rem;
+        }
+
+        .bb-title {
+          font-size: clamp(2.25rem, 9vw, 3rem);
+        }
+
+        .bb-countdown {
+          font-size: clamp(4rem, 20vw, 6rem);
+        }
+
+        .bb-btn {
+          padding: 0.55rem 1.2rem;
+          font-size: 0.95rem;
         }
       }
 
-      /* Walk in from far outside the viewport to the resting spot along the
-         bottom edge. The tile travels as one unit, media and all. */
+      /* Walk in from far outside the viewport to the resting spot in the
+         centre of the tab. The stage travels as one unit, media and all. */
       @keyframes bb-walk-in {
         from { transform: translateX(-100vw); }
         to { transform: translateX(0); }
@@ -378,7 +394,7 @@
     // --- Character media --------------------------------------------------
     populateStage(stage, characterTheme, emoji);
 
-    // --- Floating badge ------------------------------------------------------
+    // --- Break info + giant timer (only the buttons are interactive) ---------
     const card = document.createElement('div');
     card.className = 'bb-card';
 
@@ -455,11 +471,10 @@
     document.documentElement.classList.add(ACTIVE_CLASS);
 
     // --- Interaction isolation -------------------------------------------
-    // The badge never scrolls the page, and wheel/touch input on the
-    // transparent blocker cannot reach the document underneath.
+    // Wheel/touch input on the transparent blocker is absorbed so the page
+    // underneath cannot scroll; the layer's own text is pointer-transparent.
     blocker.addEventListener('wheel', (event) => event.preventDefault(), { passive: false });
     blocker.addEventListener('touchmove', (event) => event.preventDefault(), { passive: false });
-    card.addEventListener('wheel', (event) => event.preventDefault(), { passive: false });
 
     // --- Countdown ------------------------------------------------------------
     let remaining = Math.max(1, Math.floor(durationSeconds));

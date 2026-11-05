@@ -4,9 +4,9 @@
  * transparent, so the document must stay exactly as the user left it: no
  * scroll lock (that would reflow the page once the break ends) and no tint.
  *
- * Interaction isolation is handled in two places: the transparent click
- * blocker in the Shadow DOM swallows pointer input, and the rules below stop
- * the page's own text selection / drag behaviour from reacting underneath.
+ * Interaction isolation lives in the Shadow DOM: an invisible blocker layer
+ * absorbs pointer input there, and only the action buttons opt back in. The
+ * rules below stop the page's own text selection / drag behaviour reacting.
  */
 
 html.break-buddy-active,
