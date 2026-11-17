@@ -1,4 +1,4 @@
-# BreakBuddy
+# BreakBuddy :
 
 **Rest your eyes. Move your body.**
 
